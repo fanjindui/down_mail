@@ -201,3 +201,4 @@ dist/
 download/
 config/
 /classHelper/config/
+.idea/

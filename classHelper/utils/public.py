@@ -69,7 +69,7 @@ def get_mail_list(server, select, key_word, sig):
         messageObj = pyzmail.PyzMessage.factory(mailBody)  # 邮件的原始文本:# lines是邮件内容，列表形式使用join拼成一个byte变量
         # imapClient只能找出日子，精确不到分钟
         send_date = (server.fetch(uid, ['ENVELOPE']))[uid][b'ENVELOPE'].date  # 时间
-        print(type(send_date), type(select['start']), type(select['end']))
+        #print(type(send_date), type(select['start']), type(select['end']))
         if send_date<select['start'] or send_date>select['end']:
             sig.emit(f'第{str(nn)}封邮件时间不符合要求')
             continue
