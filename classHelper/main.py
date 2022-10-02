@@ -19,13 +19,31 @@ class GetMailsThread(QThread):
     def __int__(self):
         # 初始化函数
         super(GetMailsThread, self).__init__()
-        print()
     def set_args(self, mm):
         self.mm = mm
     def run(self):
         #print(self.mm)
         mails = public.get_mail_list(self.mm[0], self.mm[1], self.mm[2], self.sig_process)
         self.sig_mails.emit(mails)
+class InitIMAPConnect(QThread):
+    sig_conn = pyqtSignal(list)
+    def __init__(self):
+        super(InitIMAPConnect, self).__init__()
+    def set_args(self, server):
+        self.server = server
+        #print(self.conn)
+    def run(self):
+        email_server = IMAPClient(self.server)
+        self.sig_conn.emit([email_server])
+class LoginMailThread(QThread):
+    sig_server = pyqtSignal(list)
+    def __init__(self):
+        super(LoginMailThread, self).__init__()
+    def set_args(self, config):
+        self.configs = config
+    def run(self):
+        self.email_server, self.login_status_msg, self.login_id_set_msg, self.sel_f_msg = public.login_mail(self.configs)
+        self.sig_server.emit([self.email_server, self.login_status_msg, self.login_id_set_msg, self.sel_f_msg])
 
 
 #--------------------------------------------------------------------------
@@ -83,6 +101,12 @@ class PyQtMainEntry(QMainWindow, Ui_MainWindow):
             #return None
         try:
             # 连接imap服务器
+            #self.conn_server_thread = InitIMAPConnect()
+            #self.conn_server_thread.set_args(self.configs['server'])
+            #self.conn_server_thread.sig_conn.connect(self.conn_server)
+            #self.conn_server_thread.start()
+            #if self.conn_server_thread.isFinished():
+            #    self.conn_server_thread.exit()
             self.email_server = IMAPClient(self.configs['server'])
             self.statusbar.showMessage(f'(2/4)连接服务器{self.configs["server"]}:{self.configs["port"]}成功')  # 显示状态栏信息
         except Exception as e:
@@ -103,6 +127,8 @@ class PyQtMainEntry(QMainWindow, Ui_MainWindow):
             self.conn_label.setText('密码错误，请检查设置')
             self.email_server.logout()
             return None
+    def conn_server(self, server):
+        self.email_server = server[0]
     ## 2.设置附件保存位置
     def set_file_path(self):
         """if self.save_file_path_info.toPlainText():
@@ -127,29 +153,40 @@ class PyQtMainEntry(QMainWindow, Ui_MainWindow):
             msg_box = QMessageBox(QMessageBox.Critical, '邮箱尚未验证', '邮箱尚未验证，请点击“连接邮箱"')
             msg_box.exec_()
             return None
+        #print(1, datetime.now().strftime("%H%M%S"))
         # ________设置部分________
         ## 设置收件关键词
         self.key_word = self.rcv_kwd_edit.text()
         if not self.key_word:
             self.key_word = False
         ## 设置筛选               待优化：目前尚不能加入subject，使用subject筛选后可加快处理速度
-        self.mail_select = []
+        self.mail_select = {}
+        #print(2, datetime.now().strftime("%H%M%S"))
         # 是否设定起始时间
         set_start_time = self.start_time_check.isChecked()  # 是否设定起始时间
         if set_start_time:
             s_t = self.start_time_set.dateTime()
             start_time = public.process_qt_time(s_t)
+            if start_time > datetime.now():
+                msg_box = QMessageBox(QMessageBox.Critical, '时间设定错误', '设置筛选时间错误！起始时间不能晚于截止时间')
+                msg_box.exec_()
+                return None
         else:
             start_time = datetime(2022, 9, 3)
-        self.mail_select.append([u'SINCE', start_time])
+        #print(3, datetime.now().strftime("%H%M%S"))
         # 是否设定截止时间
         set_end_time = self.end_time_check.isChecked()
         if set_end_time:
             e_t = self.end_time_set.dateTime()
-            end_time = public.process_qt_time(e_t) + timedelta(days=1)
+            end_time = public.process_qt_time(e_t)
+            if start_time > end_time:
+                msg_box = QMessageBox(QMessageBox.Critical, '时间设定错误', '设置筛选时间错误！起始时间不能晚于截止时间')
+                msg_box.exec_()
+                return None
         else:
             end_time = datetime.now()
-        self.mail_select.append([u'BEFORE', end_time])
+        #print(4, datetime.now().strftime("%H%M%S"))
+        self.mail_select = {'start': start_time, 'end': end_time}
         self.time_span = [start_time, end_time]
         self.statusbar.showMessage(f'收件参数设置完成，正在获取信件信息')  # 显示状态栏信息
         # ________测试部分________
@@ -158,6 +195,10 @@ class PyQtMainEntry(QMainWindow, Ui_MainWindow):
         try:
         # 在后台获取邮件列表
             m = True
+            #self.login_thread = LoginMailThread()
+            #self.login_thread.set_args(self.configs)
+            #self.login_thread.sig_server.connect(self.login)
+            #self.login_thread.start()
             self.email_server, login_status_msg, login_id_set_msg, sel_f_msg = public.login_mail(self.configs)
         except Exception as e:
             m = False
@@ -180,6 +221,10 @@ class PyQtMainEntry(QMainWindow, Ui_MainWindow):
             self.exp_file_info_btn.setDisabled(True)
             self.push2wxMsgSender_btn.setDisabled(True)
 
+
+
+    def login(self, server):
+        self.email_server = server[0]
     # 接收get_mails_list方法中，实例mails_thread下信号m_thread传来的参数mails_list，并显示
     def show_mails(self, mails_list):
         self.mails_list = mails_list
